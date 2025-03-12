@@ -41,39 +41,31 @@ class VWPAnimation(mn.Scene):
 
         # create VWP
         self.vwp = Box("vwp", width=5.0, height=2.0)
-        self.unixPass = Box("pass", width=5.0, height=2.0)
-        self.unixPass.shift(4 * mn.LEFT)
-        self.play(mn.Create(self.vwp), mn.Create(self.unixPass))
+        self.unix_pass = Box("pass", width=5.0, height=2.0)
+        self.unix_pass.shift(4 * mn.LEFT)
+        self.play(mn.Create(self.vwp), mn.Create(self.unix_pass))
 
-        self.move_unlock_relock(gmail)
-        self.move_unlock_relock(banking)
-        self.move_unlock_relock(github)
+        self.move_unlock_relock(gmail, run_time=0.8)
+        self.move_unlock_relock(banking, run_time=0.8)
+        self.move_unlock_relock(github, run_time=0.8)
 
         self.play(
-            mn.FadeOut(vaultwarden), mn.FadeOut(self.vwp), mn.FadeOut(self.unixPass)
+            mn.FadeOut(vaultwarden), mn.FadeOut(self.vwp), mn.FadeOut(self.unix_pass)
         )
 
         self.wait(0.5)
 
-    def move_unlock_relock(self, cipher):
+    def move_unlock_relock(self, cipher, run_time=1.0):
         cipher.generate_target()
         cipher.target.next_to(self.vwp.heading, mn.DOWN * SCALE_FACTOR)
-        self.play(
-            mn.MoveToTarget(cipher),
-        )
-        self.play(
-            mn.Wait(),
-        )
-        self.play(
-            cipher.unlock(),
-        )
+        self.play(mn.MoveToTarget(cipher, run_time=run_time))
+        self.play(cipher.unlock(run_time=run_time))
 
         cipher.generate_target()
-        cipher.target.next_to(self.unixPass.heading, mn.DOWN * SCALE_FACTOR)
-        self.play(mn.MoveToTarget(cipher))
-        self.play(mn.Wait())
-        self.play(cipher.relock())
-        self.play(mn.FadeOut(cipher))
+        cipher.target.next_to(self.unix_pass.heading, mn.DOWN * SCALE_FACTOR)
+        self.play(mn.MoveToTarget(cipher, run_time=run_time))
+        self.play(cipher.relock(run_time=run_time))
+        self.play(mn.FadeOut(cipher, run_time=run_time))
         pass
 
 
@@ -116,25 +108,29 @@ class Box(mn.VGroup):
 class Cipher(mn.VGroup):
     def __init__(self, text_content, **kwargs):
         super().__init__(**kwargs)
+        self.border_width = 4.0 * SCALE_FACTOR
+        self.border_height = 0.75 * SCALE_FACTOR
+        self.border_stroke_width = mn.DEFAULT_STROKE_WIDTH * 0.75
         self.border = mn.Rectangle(
-            width=4.0 * SCALE_FACTOR,
-            height=0.75 * SCALE_FACTOR,
-            stroke_width=mn.DEFAULT_STROKE_WIDTH * 0.75,
+            width=self.border_width,
+            height=self.border_height,
+            stroke_width=self.border_stroke_width,
         )
-        self.border.set_color(mn.GOLD_E)
+        self.border_vw_color = mn.GOLD_E
+        self.border_unix_pass_color = mn.GREEN
+        self.border.set_color(self.border_vw_color)
 
         self.text = mn.Tex(text_content, font_size=mn.DEFAULT_FONT_SIZE * SCALE_FACTOR)
         self.text.align_to(self.border, mn.LEFT)
-        self.text.shift(np.array((0.1, 0, 0)))
+        self.text_shift = np.array((0.1, 0, 0))
+        self.text.shift(self.text_shift)
 
         self.lock = Lock(0.25)
         self.lock.align_to(
             self.border,
             mn.RIGHT,
         )
-        self.lock.shift(
-            np.array((-self.lock.width * 0.25, -self.lock.height * 0.125, 0))
-        )
+        self.lock.shift(np.array((-self.lock.width * 0.25, 0, 0)))
 
         self.add(self.border, self.text, self.lock)
 
@@ -149,43 +145,56 @@ class Cipher(mn.VGroup):
             **kwargs,
         )
 
-    def unlock(self) -> mn.Animation:
-        return mn.AnimationGroup(
-            self.lock.unlock(),
-            mn.FadeOut(self.border),
+    def unlock(self, run_time=1.0) -> mn.Animation:
+        return mn.Succession(
+            mn.AnimationGroup(
+                self.lock.unlock(),
+                self.border.animate.set_stroke(opacity=0.0),
+                run_time=run_time,
+            ),
         )
 
-    def relock(self) -> mn.Animation:
-        self.border.set_stroke(color=mn.GREEN, opacity=1.0)
+    def relock(self, run_time=1.0) -> mn.Animation:
+        self.border.set_stroke(color=self.border_unix_pass_color)
         return mn.AnimationGroup(
-            mn.FadeIn(self.border),
+            self.border.animate.set_stroke(opacity=1.0),
             self.lock.relock(),
-            run_time=2.5,
+            run_time=run_time,
         )
 
 
 class Lock(mn.VGroup):
     def __init__(self, scale=1.0, **kwargs):
         super().__init__(**kwargs)
-        self._lock = mn.SVGMobject(
-            "./svg/lock.svg",
-            width=1.0 * scale,
-            height=1.0 * scale,
+        self.scale = scale
+        self.svg = self._construct_lock()
+        self.add(self.svg)
+
+    def _construct_gen(self, f):
+        return mn.SVGMobject(
+            f,
+            width=1.0 * self.scale,
+            height=1.0 * self.scale,
             stroke_color=mn.WHITE,
         )
-        self._unlock = mn.SVGMobject(
-            "./svg/unlock.svg",
-            width=1.0 * scale,
-            height=1.0 * scale,
-            stroke_color=mn.WHITE,
-        )
-        self.add(self._lock)
 
-    def unlock(self) -> mn.Animation:
-        return mn.ReplacementTransform(self._lock, self._unlock)
+    def _construct_lock(self):
+        return self._construct_gen("./svg/lock.svg")
 
-    def relock(self) -> mn.Animation:
-        return mn.ReplacementTransform(self._unlock, self._lock)
+    def _construct_unlock(self):
+        return self._construct_gen("./svg/unlock.svg")
+
+    def unlock(self, run_time=1.0) -> mn.Animation:
+        unlock = self._construct_unlock()
+        unlock.move_to(self.svg)
+
+        # https://www.reddit.com/r/manim/comments/bq5bk2/manim_tutorial_difference_between_transform_and/
+        return mn.Transform(self.svg, unlock, run_time=run_time)
+
+    def relock(self, run_time=1.0) -> mn.Animation:
+        lock = self._construct_lock()
+        lock.move_to(self.svg)
+        return mn.Transform(self.svg, lock, run_time=run_time)
 
 
 class ManualLock(mn.VGroup):
