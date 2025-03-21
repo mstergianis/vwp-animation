@@ -21,21 +21,22 @@ class HuffmanAnimation(mn.Scene):
                 (8, 12),
                 (9, 13),
                 (9, 14),
-                (1, 15),
-                (1, 16),
+                (10, 15),
+                (10, 16),
             ],
             labels={
                 3: "o",
                 5: "l",
                 7: "h",
                 11: "d",
-                12: "newline",
+                12: "\\textbackslash{}n",
                 13: "w",
                 14: "r",
                 15: "e",
                 16: '" "',
             },
             layout="tree",
+            layout_scale=4,
             root_vertex=0,
             vertex_type=Node,
         )
@@ -61,10 +62,9 @@ class Node(mn.VGroup):
     ):
         super().__init__(**kwargs)
 
-        scale = 0.1
-        self.border = mn.Circle(radius=2.0 * scale)
+        self.border = mn.Circle(radius=0.3)
         if label is not None:
-            self.label = mn.Tex(label, font_size=mn.DEFAULT_FONT_SIZE * 2 * scale)
+            self.label = mn.Tex(label, font_size=mn.DEFAULT_FONT_SIZE * 0.3)
             self.add(self.label)
 
         self.add(self.border)
